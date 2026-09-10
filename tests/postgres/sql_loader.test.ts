@@ -18,21 +18,34 @@ describe('PostgreSQL SQL Loader', () => {
     expect(command.length).toBeGreaterThan(0);
   });
 
-  it('caches loaded SQL content for subsequent calls', async () => {
+  it('loads SQL with no filesystem access, so it works under single-file bundlers', async () => {
     vi.resetModules();
-    const readFileSync = vi.fn(() => 'SELECT 1;');
+    const readFileSync = vi.fn(() => {
+      throw new Error('fs.readFileSync should never be called');
+    });
 
     vi.doMock('fs', () => ({
       readFileSync,
     }));
 
-    const { loadCommandSql: loadCommandSqlFresh } =
-      await import('../../src/postgres/sql-loader');
+    const {
+      loadCommandSql: loadCommandSqlFresh,
+      loadMigrationSql: loadMigrationSqlFresh,
+    } = await import('../../src/postgres/sql-loader');
 
-    expect(loadCommandSqlFresh('add_job')).toBe('SELECT 1;');
-    expect(loadCommandSqlFresh('add_job')).toBe('SELECT 1;');
+    expect(loadCommandSqlFresh('add_job').length).toBeGreaterThan(0);
+    expect(loadMigrationSqlFresh('0001_schema.sql').length).toBeGreaterThan(0);
+    expect(readFileSync).not.toHaveBeenCalled();
 
-    expect(readFileSync).toHaveBeenCalledTimes(1);
     vi.doUnmock('fs');
+  });
+
+  it('throws a clear error for an unknown command or migration name', () => {
+    expect(() => loadCommandSql('does_not_exist')).toThrow(
+      'Unknown Postgres command: does_not_exist',
+    );
+    expect(() => loadMigrationSql('9999_missing.sql')).toThrow(
+      'Unknown Postgres migration: 9999_missing.sql',
+    );
   });
 });

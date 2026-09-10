@@ -23,6 +23,8 @@ export default defineConfig([
     '**/.DS_Store',
     '**/node_modules',
     'dist',
+    'src/postgres/generated-commands.ts',
+    'src/postgres/generated-migrations.ts',
     'elixir',
     'php/vendor',
     'rust/target',

@@ -1,69 +1,31 @@
-import { readFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-
-function getDirname(): string {
-  if (typeof __dirname !== 'undefined' && __dirname) {
-    return __dirname;
-  }
-  const stack = new Error().stack || '';
-  for (const line of stack.split('\n')) {
-    const match = line.match(/(file:\/\/\/[^\s)]+)/);
-    if (match) {
-      try {
-        return dirname(fileURLToPath(match[1]));
-      } catch {
-        // continue searching
-      }
-    }
-  }
-  throw new Error('Could not determine sql-loader directory path');
-}
-
-const currentDir = getDirname();
+import { commandSql } from './generated-commands';
+import { migrationSql } from './generated-migrations';
 
 /**
- * Loads a migration's SQL from its `.sql` file — the portable source of truth
- * shared with the Elixir/Python ports. Results are cached after the first read.
- *
- * The `.sql` files live next to this module under `migrations/`. The published
- * build copies them alongside the compiled output (a `copy:sql` build step,
- * analogous to how the Lua scripts are bundled), so the same relative lookup
- * works at runtime.
+ * Loads a migration's SQL by filename — the portable source of truth shared
+ * with the Elixir/Python ports. Content is inlined at build time (see
+ * `scripts/generateSqlModules.js`) instead of read from disk, so this works
+ * unmodified under single-file bundlers (bun build --compile, esbuild
+ * --bundle, pkg, deno compile, Node SEA) that don't ship loose `.sql` files.
  */
-const MIGRATIONS_DIR = join(currentDir, 'migrations');
-
-/**
- * Runtime queries live under `commands/`. Each `.sql` file is one parameterized
- * statement (a `SELECT fn(...)` for the PL/pgSQL operations, or a direct
- * query). They contain NO schema/namespace references — the connection's
- * `search_path` selects the schema — so they are portable verbatim to the
- * Python/Elixir/PHP/Rust ports (mirroring how the Redis backend's `.lua`
- * scripts never hardcode the key prefix).
- */
-const COMMANDS_DIR = join(currentDir, 'commands');
-
-const migrationCache = new Map<string, string>();
-const commandCache = new Map<string, string>();
-
 export function loadMigrationSql(file: string): string {
-  let sql = migrationCache.get(file);
+  const sql = migrationSql[file];
   if (sql === undefined) {
-    sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
-    migrationCache.set(file, sql);
+    throw new Error(`Unknown Postgres migration: ${file}`);
   }
   return sql;
 }
 
 /**
- * Loads a runtime command's SQL by name (without the `.sql` extension), cached
- * after the first read.
+ * Loads a runtime command's SQL by name (without the `.sql` extension).
+ * Each `.sql` file is one parameterized statement, portable verbatim to the
+ * Python/Elixir/PHP/Rust ports (mirroring how the Redis backend's `.lua`
+ * scripts never hardcode the key prefix).
  */
 export function loadCommandSql(name: string): string {
-  let sql = commandCache.get(name);
+  const sql = commandSql[`${name}.sql`];
   if (sql === undefined) {
-    sql = readFileSync(join(COMMANDS_DIR, `${name}.sql`), 'utf8');
-    commandCache.set(name, sql);
+    throw new Error(`Unknown Postgres command: ${name}`);
   }
   return sql;
 }

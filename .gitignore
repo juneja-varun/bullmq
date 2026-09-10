@@ -3,6 +3,8 @@ node_modules
 /dist
 /rawScripts
 /src/scripts
+/src/postgres/generated-commands.ts
+/src/postgres/generated-migrations.ts
 /rust/src/commands
 # Log files
 npm-debug.log*
